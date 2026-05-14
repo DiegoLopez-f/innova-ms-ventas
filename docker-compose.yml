@@ -1,0 +1,89 @@
+version: '3.8'
+
+services:
+  # ==========================================
+  # CAPA 3: BASE DE DATOS
+  # ==========================================
+  mysql-db:
+    image: mysql:8.0
+    container_name: innova_mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: super_secret_root
+      MYSQL_DATABASE: ecommercedb      
+      MYSQL_USER: db_user
+      MYSQL_PASSWORD: db_password
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - backend_db_net 
+    platform: linux/amd64 
+
+  # ==========================================
+  # CAPA 2: MICROSERVICIOS
+  # ==========================================
+  ms-despachos:
+    image: innova-ms-despachos:latest # <--- ESTE USA LA IMAGEN PRE-CONSTRUIDA
+    container_name: innova_ms_despachos
+    restart: unless-stopped
+    environment:
+      - DB_ENDPOINT=mysql-db
+      - DB_PORT=3306
+      - DB_NAME=ecommercedb
+      - DB_USERNAME=db_user
+      - DB_PASSWORD=db_password
+    ports:
+      - "8081:8080" 
+    depends_on:
+      - mysql-db
+    networks:
+      - frontend_backend_net 
+      - backend_db_net       
+    platform: linux/amd64
+
+  ms-ventas:
+    build: 
+      context: . # <--- ESTE SE CONSTRUYE LOCALMENTE EN ESTE REPOSITORIO
+      dockerfile: Dockerfile
+    container_name: innova_ms_ventas
+    restart: unless-stopped
+    environment:
+      - DB_ENDPOINT=mysql-db
+      - DB_PORT=3306
+      - DB_NAME=ecommercedb
+      - DB_USERNAME=db_user
+      - DB_PASSWORD=db_password
+    ports:
+      - "8082:8080" 
+    depends_on:
+      - mysql-db
+    networks:
+      - frontend_backend_net 
+      - backend_db_net       
+    platform: linux/amd64
+
+  # ==========================================
+  # CAPA 1: FRONTEND
+  # ==========================================
+  frontend:
+    image: innova-frontend:latest # <--- ESTE USA LA IMAGEN PRE-CONSTRUIDA
+    container_name: innova_frontend
+    restart: unless-stopped
+    ports:
+      - "80:8080" 
+    depends_on:
+      - ms-despachos 
+      - ms-ventas
+    networks:
+      - frontend_backend_net 
+    platform: linux/amd64
+
+networks:
+  frontend_backend_net:
+    driver: bridge
+  backend_db_net:
+    driver: bridge
+
+volumes:
+  mysql_data:
+    driver: local
