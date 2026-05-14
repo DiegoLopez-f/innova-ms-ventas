@@ -1,0 +1,53 @@
+name: CI/CD MS-Despachos
+
+on:
+  push:
+    branches:
+      - deploy
+
+jobs:
+  build-and-deploy:
+    runs-on: self-hosted
+
+    steps:
+      - name: 1. Descargar el código
+        uses: actions/checkout@v3
+
+      - name: 2. Configurar credenciales AWS
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: 3. Conectar a Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: 4. Construir y Publicar Imagen en ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: innova-ms-ventas
+          IMAGE_TAG: latest
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+
+      - name: 5. Desplegar en EC2 Privada conectando a DB
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: innova-ms-ventas
+          IMAGE_TAG: latest
+        run: |
+          docker stop innova_ms_ventas || true
+          docker rm innova_ms_ventas || true
+          
+          # AQUI INYECTAMOS LA CONEXION A LA BASE DE DATOS
+          docker run -d --name innova_ms_ventas -p 8082:8080 --restart unless-stopped \
+            -e DB_ENDPOINT=10.0.3.36 \
+            -e DB_PORT=3306 \
+            -e DB_NAME=ecommercedb \
+            -e DB_USERNAME=db_user \
+            -e DB_PASSWORD=db_password \
+            $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
