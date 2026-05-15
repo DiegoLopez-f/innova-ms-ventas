@@ -42,5 +42,7 @@ USER springuser
 # Documentamos qué puerto usa tu app por defecto
 EXPOSE 8080
 
+#comentario para prueba ms
+
 # El comando final que ejecuta tu aplicación cuando el contenedor arranca
 CMD ["java", "-jar", "app.jar"]
